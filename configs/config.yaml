@@ -1,0 +1,66 @@
+data:
+  data_dir: "./data"           # 根目录，包含 conditions 和 params
+  batch_size: 16
+  num_workers: 4
+  token_size: 64               # 你的要求1: 固定64作为特征维度(Channel)
+  # 以下参数由Dataset自动计算，但在此预留默认值
+  max_token_idx: 200           # 预估最大序列长度，代码中会动态调整
+  num_seeds: 20                # 预估Seed数量
+
+model:
+  type: "unet"                 # 噪声模型类型: unet, transformer
+  
+  rpg:
+    hidden_dim: 512            # 原型维度
+    cond_dim: 512              # pth条件维度
+    seed_dim: 512              # Seed Embedding维度
+    null_seed_prob: 0.2        # 训练时随机置空Seed的概率
+    pos_fusion: "add"          # 位置编码融合: add, concat
+    pos_type: "learnable"        # token位置编码: learnable, sinusoidal
+    
+  rnn:
+    type: "gru"                # 序列模型: mamba, gru, lstm, transformer
+    layers: 2
+    dropout: 0.0
+    # Mamba特定
+    d_state: 16
+    d_conv: 4
+    expand: 2
+    # RNN特定
+    bidirectional: True
+  
+  unet:
+    dim: 64
+    dim_mults: [1, 2, 4, 8]
+    input_channels: 64         # 对应 token_size
+  
+  transformer:
+    depth: 12
+    heads: 8
+    mlp_dim: 2048
+    input_channels: 64         # 对应 token_size
+
+  diffusion:
+    timesteps: 1000
+    beta_schedule: "cosine"
+    prediction_type: "eps"     # eps, x, v
+    loss_type: "mse"
+
+train:
+  seed: 42
+  num_epochs: 5000
+  lr: 1e-4
+  grad_clip: 1.0
+  use_amp: true                # 自动混合精度
+  use_ema: true
+  ema_decay: 0.9999
+  save_interval: 500
+  log_dir: "logs/experiment_1"
+
+inference:
+  ckpt_path: ""                # 运行时指定
+  structure:
+    - {count: 2, id: 0, name: "a1", shape: [2, 64]}
+    - {count: 64, id: 1, name: "b1", shape: [2048, 2]}
+    - {count: 64, id: 2, name: "a2", shape: [2, 2048]}
+    - {count: 2, id: 3, name: "b2", shape: [64, 2]}

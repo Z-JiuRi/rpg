@@ -7,6 +7,8 @@ from scipy.stats import norm
 import numpy as np
 import pandas as pd
 import matplotlib.font_manager as fm
+import logging
+logger = logging.getLogger(__name__)
 import matplotlib
 matplotlib.use('Agg')
 
@@ -119,13 +121,14 @@ def setup_global_fonts():
     # plt.rcParams['savefig.dpi'] = 300
     plt.close('all')
 
+
 def plot_gaussian(data, filename=None):
     plt.figure(figsize=(10, 5), layout='constrained')
     # 使用seaborn的distplot，自动处理缩放
-    sns.histplot(data.flatten().detach().cpu().numpy(), bins=100, alpha=0.5, label='data', kde=False, stat='density')
+    sns.histplot(data.detach().cpu().numpy().flatten(), bins=100, alpha=0.5, label='data', kde=False, stat='density')
     # 用高斯分布拟合data的分布
-    mu, std = norm.fit(data.flatten().detach().cpu().numpy())
-    x = np.linspace(min(data.flatten().detach().cpu().numpy()), max(data.flatten().detach().cpu().numpy()), 1000)
+    mu, std = norm.fit(data.detach().cpu().numpy().flatten())
+    x = np.linspace(min(data.detach().cpu().numpy().flatten()), max(data.detach().cpu().numpy().flatten()), 1000)
     p = norm.pdf(x, mu, std)
     plt.plot(x, p, 'r-', linewidth=2, label=f'data gaussian fit: μ={mu:.6f}, σ={std:.6f}')
     plt.title(f'Gaussian Distribution')
@@ -135,27 +138,22 @@ def plot_gaussian(data, filename=None):
         plt.savefig(filename)
     plt.close()
 
+
 def plot_histogram(pre, ori, filename=None):
-    # 如果是[B,H,W]，则随机取一个样本
-    if pre.dim() == 3:
-        pre = pre[torch.randint(0, pre.size(0), (1,)).item()]
-    if ori.dim() == 3:
-        ori = ori[torch.randint(0, ori.size(0), (1,)).item()]
-    
     plt.figure(figsize=(10, 5))
     # 使用seaborn绘制原始数据和重建数据的分布
-    sns.histplot(ori.flatten().detach().cpu().numpy(), bins=100, alpha=0.5, label='Original', stat='density', color='blue')
-    sns.histplot(pre.flatten().detach().cpu().numpy(), bins=100, alpha=0.5, label='Reconstructed', stat='density', color='orange')
+    sns.histplot(ori.detach().cpu().numpy().flatten(), bins=100, alpha=0.5, label='Original', stat='density', color='blue')
+    sns.histplot(pre.detach().cpu().numpy().flatten(), bins=100, alpha=0.5, label='Reconstructed', stat='density', color='orange')
 
     # 拟合原始数据的高斯分布
-    mu_orig, std_orig = norm.fit(ori.flatten().detach().cpu().numpy())
+    mu_orig, std_orig = norm.fit(ori.detach().cpu().numpy().flatten())
     xmin, xmax = plt.xlim()
     x = np.linspace(xmin, xmax, 1000)
     p_orig = norm.pdf(x, mu_orig, std_orig)
     plt.plot(x, p_orig, 'k', linewidth=2, label=f'Original Fit: μ={mu_orig:.2f}, σ={std_orig:.2f}')
 
     # 拟合重建数据的高斯分布
-    mu_recon, std_recon = norm.fit(pre.flatten().detach().cpu().numpy())
+    mu_recon, std_recon = norm.fit(pre.detach().cpu().numpy().flatten())
     p_recon = norm.pdf(x, mu_recon, std_recon)
     plt.plot(x, p_recon, 'r', linewidth=2, label=f'Reconstructed Fit: μ={mu_recon:.2f}, σ={std_recon:.2f}')
     plt.title(f'Value Distribution')
@@ -164,6 +162,7 @@ def plot_histogram(pre, ori, filename=None):
     if filename:
         plt.savefig(filename)
     plt.close()
+
 
 def plot_violin(pre, ori, labels=None, colors=None, title=None, filename=None):
     """
@@ -175,18 +174,13 @@ def plot_violin(pre, ori, labels=None, colors=None, title=None, filename=None):
     colors: 两个数据集的颜色列表 [color1, color2]
     title: 图表标题
     """
-    # 如果是[B,H,W]，则随机取一个样本
-    if pre.dim() == 3:
-        pre = pre[torch.randint(0, pre.size(0), (1,)).item()]
-    if ori.dim() == 3:
-        ori = ori[torch.randint(0, ori.size(0), (1,)).item()]
-    
+    # 转换为numpy数组
     data1 = pre.detach().flatten().cpu().numpy() if torch.is_tensor(pre) else np.array(pre)
     data2 = ori.detach().flatten().cpu().numpy() if torch.is_tensor(ori) else np.array(ori)
     
     # 设置默认参数
     if labels is None:
-        labels = ['pre', 'ori']
+        labels = ['Tensor 1', 'Tensor 2']
     if colors is None:
         colors = ['skyblue', 'salmon']
     
@@ -197,7 +191,7 @@ def plot_violin(pre, ori, labels=None, colors=None, title=None, filename=None):
     })
     
     # 创建图形
-    plt.figure(figsize=(10, 5), dpi=100)
+    plt.figure(figsize=(10, 5))
     
     # 绘制小提琴图 - 使用split=True创建不对称效果
     ax = sns.violinplot(
@@ -227,18 +221,13 @@ def plot_violin(pre, ori, labels=None, colors=None, title=None, filename=None):
              verticalalignment='top', fontsize=10,
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    plt.savefig(filename)
+    if filename:
+        plt.savefig(filename)
     plt.close()
 
-def plot_heatmap(pre,
-                 ori, filename=None):
-    fig, axs = plt.subplots(3, 1, figsize=(20, 10))
 
-    # 如果是[B,H,W]，则随机取一个样本
-    if pre.dim() == 3:
-        pre = pre[torch.randint(0, pre.size(0), (1,)).item()]
-    if ori.dim() == 3:
-        ori = ori[torch.randint(0, ori.size(0), (1,)).item()]
+def plot_heatmap(pre, ori, filename=None):
+    fig, axs = plt.subplots(3, 1, figsize=(20, 10))
 
     # 去除中间维度
     pre_data = pre.detach().cpu().squeeze()
@@ -266,13 +255,15 @@ def plot_heatmap(pre,
         plt.savefig(filename)
     plt.close()
 
-def plot_single_heatmap(data, title=None, filename=None):
-    plt.figure(figsize=(20, 10), dpi=100)
-    im = plt.imshow(data, aspect='auto', cmap='seismic', 
-                    vmin=-data.abs().max(), vmax=data.abs().max())
-    plt.colorbar(im)
-    plt.title(title)
+
+def plot_single_heatmap(data, filename=None):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    im = ax.imshow(data, aspect='auto', cmap='seismic',
+                   vmin=-data.abs().max(), vmax=data.abs().max())
+    fig.colorbar(im, ax=ax)
+    ax.set_title('data')
     plt.tight_layout()
     if filename:
         plt.savefig(filename)
     plt.close()
+
